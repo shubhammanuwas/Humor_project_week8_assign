@@ -22,16 +22,26 @@ function readString(value: FormDataEntryValue | null): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
-function redirectQuery(message: string, type: 'success' | 'error' = 'success') {
+function readRedirectTarget(formData: FormData) {
+  return readString(formData.get('redirect_to')) ?? '/workspace'
+}
+
+function redirectToTarget(
+  target: string,
+  message: string,
+  type: 'success' | 'error' = 'success'
+) {
   const search = new URLSearchParams()
   search.set(type, message)
-  return `/workspace?${search.toString()}`
+  return `${target}?${search.toString()}`
 }
 
 export async function createFlavor(formData: FormData) {
   const result = await getAdminActionContext()
+  const redirectTarget = readRedirectTarget(formData)
+
   if ('error' in result) {
-    redirect(redirectQuery(result.error, 'error'))
+    redirect(redirectToTarget(redirectTarget, result.error, 'error'))
   }
 
   const slug = readString(formData.get('slug'))
@@ -39,30 +49,30 @@ export async function createFlavor(formData: FormData) {
   const actorId = result.context.profileId
 
   if (!slug) {
-    redirect(redirectQuery('Slug is required.', 'error'))
+    redirect(redirectToTarget(redirectTarget, 'Slug is required.', 'error'))
   }
 
-  const { error } = await result.context.supabase
-    .from('humor_flavors')
-    .insert({
-      slug,
-      description,
-      created_by_user_id: actorId,
-      modified_by_user_id: actorId,
-    })
+  const { error } = await result.context.supabase.from('humor_flavors').insert({
+    slug,
+    description,
+    created_by_user_id: actorId,
+    modified_by_user_id: actorId,
+  })
 
   if (error) {
-    redirect(redirectQuery(error.message, 'error'))
+    redirect(redirectToTarget(redirectTarget, error.message, 'error'))
   }
 
   revalidatePath('/workspace')
-  redirect(redirectQuery('Humor flavor created.'))
+  redirect(redirectToTarget(redirectTarget, 'Humor flavor created.'))
 }
 
 export async function updateFlavor(formData: FormData) {
   const result = await getAdminActionContext()
+  const redirectTarget = readRedirectTarget(formData)
+
   if ('error' in result) {
-    redirect(redirectQuery(result.error, 'error'))
+    redirect(redirectToTarget(redirectTarget, result.error, 'error'))
   }
 
   const id = readString(formData.get('id'))
@@ -71,7 +81,7 @@ export async function updateFlavor(formData: FormData) {
   const actorId = result.context.profileId
 
   if (!id || !slug) {
-    redirect(redirectQuery('Flavor id and slug are required.', 'error'))
+    redirect(redirectToTarget(redirectTarget, 'Flavor id and slug are required.', 'error'))
   }
 
   const { error } = await result.context.supabase
@@ -84,38 +94,42 @@ export async function updateFlavor(formData: FormData) {
     .eq('id', id)
 
   if (error) {
-    redirect(redirectQuery(error.message, 'error'))
+    redirect(redirectToTarget(redirectTarget, error.message, 'error'))
   }
 
   revalidatePath('/workspace')
-  redirect(redirectQuery('Humor flavor updated.'))
+  redirect(redirectToTarget(redirectTarget, 'Humor flavor updated.'))
 }
 
 export async function deleteFlavor(formData: FormData) {
   const result = await getAdminActionContext()
+  const redirectTarget = readRedirectTarget(formData)
+
   if ('error' in result) {
-    redirect(redirectQuery(result.error, 'error'))
+    redirect(redirectToTarget(redirectTarget, result.error, 'error'))
   }
 
   const id = readString(formData.get('id'))
   if (!id) {
-    redirect(redirectQuery('Flavor id is required.', 'error'))
+    redirect(redirectToTarget(redirectTarget, 'Flavor id is required.', 'error'))
   }
 
   const { error } = await result.context.supabase.from('humor_flavors').delete().eq('id', id)
 
   if (error) {
-    redirect(redirectQuery(error.message, 'error'))
+    redirect(redirectToTarget(redirectTarget, error.message, 'error'))
   }
 
   revalidatePath('/workspace')
-  redirect(redirectQuery('Humor flavor deleted.'))
+  redirect(redirectToTarget(redirectTarget, 'Humor flavor deleted.'))
 }
 
 export async function createStep(formData: FormData) {
   const result = await getAdminActionContext()
+  const redirectTarget = readRedirectTarget(formData)
+
   if ('error' in result) {
-    redirect(redirectQuery(result.error, 'error'))
+    redirect(redirectToTarget(redirectTarget, result.error, 'error'))
   }
 
   const humorFlavorId = readString(formData.get('humor_flavor_id'))
@@ -138,7 +152,8 @@ export async function createStep(formData: FormData) {
     humorFlavorStepTypeId === null
   ) {
     redirect(
-      redirectQuery(
+      redirectToTarget(
+        redirectTarget,
         'Flavor, model, input type, output type, and step type are required.',
         'error'
       )
@@ -189,17 +204,19 @@ export async function createStep(formData: FormData) {
   const { error } = await result.context.supabase.from('humor_flavor_steps').insert(payload)
 
   if (error) {
-    redirect(redirectQuery(error.message, 'error'))
+    redirect(redirectToTarget(redirectTarget, error.message, 'error'))
   }
 
   revalidatePath('/workspace')
-  redirect(redirectQuery('Humor flavor step created.'))
+  redirect(redirectToTarget(redirectTarget, 'Humor flavor step created.'))
 }
 
 export async function updateStep(formData: FormData) {
   const result = await getAdminActionContext()
+  const redirectTarget = readRedirectTarget(formData)
+
   if ('error' in result) {
-    redirect(redirectQuery(result.error, 'error'))
+    redirect(redirectToTarget(redirectTarget, result.error, 'error'))
   }
 
   const id = readString(formData.get('id'))
@@ -222,7 +239,9 @@ export async function updateStep(formData: FormData) {
     llmOutputTypeId === null ||
     humorFlavorStepTypeId === null
   ) {
-    redirect(redirectQuery('Step id, description, and order are required.', 'error'))
+    redirect(
+      redirectToTarget(redirectTarget, 'Step id, description, and order are required.', 'error')
+    )
   }
 
   const payload: Record<string, string | number | null> = {
@@ -238,33 +257,30 @@ export async function updateStep(formData: FormData) {
     modified_by_user_id: actorId,
   }
 
-  payload.description = description
-  payload.llm_temperature = llmTemperature
-  payload.llm_system_prompt = llmSystemPrompt
-  payload.llm_user_prompt = llmUserPrompt
-
   const { error } = await result.context.supabase
     .from('humor_flavor_steps')
     .update(payload)
     .eq('id', id)
 
   if (error) {
-    redirect(redirectQuery(error.message, 'error'))
+    redirect(redirectToTarget(redirectTarget, error.message, 'error'))
   }
 
   revalidatePath('/workspace')
-  redirect(redirectQuery('Humor flavor step updated.'))
+  redirect(redirectToTarget(redirectTarget, 'Humor flavor step updated.'))
 }
 
 export async function deleteStep(formData: FormData) {
   const result = await getAdminActionContext()
+  const redirectTarget = readRedirectTarget(formData)
+
   if ('error' in result) {
-    redirect(redirectQuery(result.error, 'error'))
+    redirect(redirectToTarget(redirectTarget, result.error, 'error'))
   }
 
   const id = readString(formData.get('id'))
   if (!id) {
-    redirect(redirectQuery('Step id is required.', 'error'))
+    redirect(redirectToTarget(redirectTarget, 'Step id is required.', 'error'))
   }
 
   const { error } = await result.context.supabase
@@ -273,17 +289,19 @@ export async function deleteStep(formData: FormData) {
     .eq('id', id)
 
   if (error) {
-    redirect(redirectQuery(error.message, 'error'))
+    redirect(redirectToTarget(redirectTarget, error.message, 'error'))
   }
 
   revalidatePath('/workspace')
-  redirect(redirectQuery('Humor flavor step deleted.'))
+  redirect(redirectToTarget(redirectTarget, 'Humor flavor step deleted.'))
 }
 
 export async function moveStep(formData: FormData) {
   const result = await getAdminActionContext()
+  const redirectTarget = readRedirectTarget(formData)
+
   if ('error' in result) {
-    redirect(redirectQuery(result.error, 'error'))
+    redirect(redirectToTarget(redirectTarget, result.error, 'error'))
   }
 
   const stepId = readString(formData.get('step_id'))
@@ -292,7 +310,7 @@ export async function moveStep(formData: FormData) {
   const actorId = result.context.profileId
 
   if (!stepId || !humorFlavorId || (direction !== 'up' && direction !== 'down')) {
-    redirect(redirectQuery('Invalid step reorder request.', 'error'))
+    redirect(redirectToTarget(redirectTarget, 'Invalid step reorder request.', 'error'))
   }
 
   const { data, error } = await result.context.supabase
@@ -302,7 +320,7 @@ export async function moveStep(formData: FormData) {
     .order('order_by', { ascending: true })
 
   if (error) {
-    redirect(redirectQuery(error.message, 'error'))
+    redirect(redirectToTarget(redirectTarget, error.message, 'error'))
   }
 
   const steps = (data ?? []).map((row, index) => ({
@@ -312,12 +330,12 @@ export async function moveStep(formData: FormData) {
 
   const currentIndex = steps.findIndex((step) => step.id === stepId)
   if (currentIndex === -1) {
-    redirect(redirectQuery('Step not found.', 'error'))
+    redirect(redirectToTarget(redirectTarget, 'Step not found.', 'error'))
   }
 
   const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
   if (swapIndex < 0 || swapIndex >= steps.length) {
-    redirect(redirectQuery('Step is already at the edge.', 'error'))
+    redirect(redirectToTarget(redirectTarget, 'Step is already at the edge.', 'error'))
   }
 
   const currentStep = steps[currentIndex]
@@ -332,7 +350,7 @@ export async function moveStep(formData: FormData) {
     .eq('id', currentStep.id)
 
   if (updateCurrent.error) {
-    redirect(redirectQuery(updateCurrent.error.message, 'error'))
+    redirect(redirectToTarget(redirectTarget, updateCurrent.error.message, 'error'))
   }
 
   const updateAdjacent = await result.context.supabase
@@ -344,9 +362,9 @@ export async function moveStep(formData: FormData) {
     .eq('id', adjacentStep.id)
 
   if (updateAdjacent.error) {
-    redirect(redirectQuery(updateAdjacent.error.message, 'error'))
+    redirect(redirectToTarget(redirectTarget, updateAdjacent.error.message, 'error'))
   }
 
   revalidatePath('/workspace')
-  redirect(redirectQuery(direction === 'up' ? 'Step moved up.' : 'Step moved down.'))
+  redirect(redirectToTarget(redirectTarget, direction === 'up' ? 'Step moved up.' : 'Step moved down.'))
 }
