@@ -360,6 +360,16 @@ textarea {
   color: var(--brand-strong);
 }
 
+.flavor-action-grid {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.flavor-action-grid .btn {
+  width: 100%;
+}
+
 .step-editor-hero,
 .step-create-panel,
 .testing-lab-hero {

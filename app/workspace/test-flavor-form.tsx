@@ -57,9 +57,11 @@ async function parseJsonResponse(response: Response): Promise<unknown> {
 export default function TestFlavorForm({
   flavors,
   defaultFlavorId,
+  excludedFlavorCount = 0,
 }: {
   flavors: FlavorOption[]
   defaultFlavorId?: string
+  excludedFlavorCount?: number
 }) {
   const [files, setFiles] = useState<File[]>([])
   const [humorFlavorId, setHumorFlavorId] = useState(defaultFlavorId ?? flavors[0]?.id ?? '')
@@ -213,6 +215,14 @@ export default function TestFlavorForm({
           Upload a small image test set and run the selected humor flavor across each image using
           the AlmostCrackd REST pipeline.
         </p>
+        {excludedFlavorCount > 0 ? (
+          <p className="muted">
+            Showing {flavors.length} test-compatible flavor
+            {flavors.length === 1 ? '' : 's'}. {excludedFlavorCount} incompatible staging flavor
+            {excludedFlavorCount === 1 ? ' is' : 's are'} hidden from this runner to avoid known
+            pipeline failures.
+          </p>
+        ) : null}
       </div>
 
       <form onSubmit={runTest} className="stack">

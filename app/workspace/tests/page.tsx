@@ -3,6 +3,7 @@ import {
   TestingPanel,
   WorkspaceHeader,
   WorkspaceStatus,
+  getCompatibleFlavorIds,
   loadWorkspaceData,
   type WorkspaceSearchParams,
 } from '../workspace-console'
@@ -14,15 +15,22 @@ export default async function WorkspaceTestsPage({
 }: {
   searchParams?: WorkspaceSearchParams
 }) {
-  const { userEmail, profile, selectedFlavor, flavors, steps, captions } =
+  const { userEmail, profile, selectedFlavor, flavors, steps, captions, stepsByFlavor } =
     await loadWorkspaceData(searchParams)
 
-  const flavorsWithSteps = flavors.filter((flavor) => {
-    const flavorId = String(flavor.id)
-    return steps.some((step) => String(step.humor_flavor_id ?? '') === flavorId)
-  }).length
+  const compatibleFlavorIds = getCompatibleFlavorIds(flavors, stepsByFlavor)
+  const compatibleFlavors = flavors.filter((flavor) => compatibleFlavorIds.has(String(flavor.id)))
+  const excludedFlavorCount = flavors.length - compatibleFlavors.length
+  const selectedFlavorIsCompatible = compatibleFlavorIds.has(selectedFlavor)
+  const effectiveSelectedFlavor = selectedFlavorIsCompatible
+    ? selectedFlavor
+    : compatibleFlavors[0]
+      ? String(compatibleFlavors[0].id)
+      : ''
+
   const selectedFlavorLabel =
-    flavors.find((flavor) => String(flavor.id) === selectedFlavor)?.slug ?? 'Choose a flavor'
+    compatibleFlavors.find((flavor) => String(flavor.id) === effectiveSelectedFlavor)?.slug ??
+    'Choose a flavor'
 
   return (
     <main className="shell">
@@ -52,7 +60,7 @@ export default async function WorkspaceTestsPage({
             </article>
             <article className="testing-stat-card">
               <span className="testing-stat-label">Ready to test</span>
-              <strong className="testing-stat-value">{flavorsWithSteps}</strong>
+              <strong className="testing-stat-value">{compatibleFlavors.length}</strong>
             </article>
             <article className="testing-stat-card">
               <span className="testing-stat-label">Recent captions loaded</span>
@@ -67,7 +75,11 @@ export default async function WorkspaceTestsPage({
 
         <section className="testing-lab-layout">
           <div className="testing-lab-main">
-            <TestingPanel flavors={flavors} selectedFlavor={selectedFlavor} />
+            <TestingPanel
+              flavors={compatibleFlavors}
+              selectedFlavor={effectiveSelectedFlavor}
+              excludedFlavorCount={excludedFlavorCount}
+            />
           </div>
           <div className="testing-lab-sidebar">
             <CaptionLookupPanel

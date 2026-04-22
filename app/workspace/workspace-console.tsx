@@ -3,13 +3,12 @@ import { requireAdminPage } from '@/lib/admin/auth'
 import SignOutButton from './sign-out-button'
 import ThemeToggle from './theme-toggle'
 import TestFlavorForm from './test-flavor-form'
+import FlavorCard from './flavor-card'
 import {
   createFlavor,
   createStep,
-  deleteFlavor,
   deleteStep,
   moveStep,
-  updateFlavor,
   updateStep,
 } from './actions'
 
@@ -147,6 +146,64 @@ export async function loadWorkspaceData(searchParams?: WorkspaceSearchParams) {
     lookupErrors,
     stepsByFlavor,
   }
+}
+
+export function getCompatibleFlavorIds(
+  flavors: FlavorRow[],
+  stepsByFlavor: Map<string, StepRow[]>
+) {
+  const compatible = new Set<string>()
+
+  for (const flavor of flavors) {
+    const flavorId = String(flavor.id)
+    const steps = [...(stepsByFlavor.get(flavorId) ?? [])]
+
+    if (steps.length === 0) {
+      continue
+    }
+
+    const orderedSteps = steps
+      .filter((step) => typeof step.order_by === 'number')
+      .sort((left, right) => Number(left.order_by ?? 0) - Number(right.order_by ?? 0))
+
+    if (orderedSteps.length !== steps.length) {
+      continue
+    }
+
+    const uniqueOrders = new Set(orderedSteps.map((step) => Number(step.order_by)))
+    if (uniqueOrders.size !== orderedSteps.length) {
+      continue
+    }
+
+    const hasConsecutiveOrder = orderedSteps.every(
+      (step, index) => Number(step.order_by) === index + 1
+    )
+
+    if (!hasConsecutiveOrder) {
+      continue
+    }
+
+    const hasRequiredRuntimeFields = orderedSteps.every(
+      (step) =>
+        typeof step.llm_model_id === 'number' &&
+        typeof step.llm_input_type_id === 'number' &&
+        typeof step.llm_output_type_id === 'number' &&
+        typeof step.humor_flavor_step_type_id === 'number'
+    )
+
+    if (!hasRequiredRuntimeFields) {
+      continue
+    }
+
+    const lastStep = orderedSteps[orderedSteps.length - 1]
+    if (lastStep.llm_output_type_id !== 2) {
+      continue
+    }
+
+    compatible.add(flavorId)
+  }
+
+  return compatible
 }
 
 export function WorkspaceHeader({
@@ -462,69 +519,16 @@ export function FlavorsPanel({
       ) : (
         <div className="flavor-library-grid">
           {flavors.map((flavor) => (
-            <article
+            <FlavorCard
               key={String(flavor.id)}
-              className={`card stack flavor-card ${selectedFlavor === String(flavor.id) ? 'flavor-card-active' : ''}`}
-            >
-              <div className="card-title flavor-card-header">
-                <div className="stack">
-                  <div className="flavor-card-topline">
-                    <strong>{flavor.slug ?? `Flavor ${flavor.id}`}</strong>
-                    <span className="chip chip-soft">
-                      {(stepsByFlavor.get(String(flavor.id)) ?? []).length} step
-                      {(stepsByFlavor.get(String(flavor.id)) ?? []).length === 1 ? '' : 's'}
-                    </span>
-                  </div>
-                  <p className="muted mono">id: {String(flavor.id)}</p>
-                  <p className="flavor-description">
-                    {flavor.description?.trim() || 'No description yet. Add one so the intent is obvious.'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flavor-meta-row">
-                <span className="flavor-meta-pill">
-                  Created {flavor.created_datetime_utc ? flavor.created_datetime_utc : 'unknown'}
-                </span>
-                {selectedFlavor === String(flavor.id) ? (
-                  <span className="flavor-meta-pill flavor-meta-pill-active">Active selection</span>
-                ) : null}
-              </div>
-
-              <div className="inline-actions">
-                <Link href={`/workspace/steps?flavor=${String(flavor.id)}`} className="btn btn-subtle">
-                  Edit Steps
-                </Link>
-                <Link href={`/workspace/tests?flavor=${String(flavor.id)}`} className="btn btn-subtle">
-                  Test Flavor
-                </Link>
-              </div>
-
-              <form action={updateFlavor} className="stack">
-                <input type="hidden" name="id" value={String(flavor.id)} />
-                <input type="hidden" name="redirect_to" value={redirectTo} />
-                <label className="stack">
-                  <span className="muted">Slug</span>
-                  <input name="slug" defaultValue={flavor.slug ?? ''} required />
-                </label>
-                <label className="stack">
-                  <span className="muted">Description</span>
-                  <textarea name="description" defaultValue={flavor.description ?? ''} required />
-                </label>
-                <div className="inline-actions">
-                  <button type="submit" className="btn">
-                    Save Flavor
-                  </button>
-                </div>
-              </form>
-              <form action={deleteFlavor}>
-                <input type="hidden" name="id" value={String(flavor.id)} />
-                <input type="hidden" name="redirect_to" value={redirectTo} />
-                <button type="submit" className="btn btn-danger">
-                  Delete Flavor
-                </button>
-              </form>
-            </article>
+              id={String(flavor.id)}
+              slug={flavor.slug ?? `Flavor ${flavor.id}`}
+              description={flavor.description ?? ''}
+              createdAt={flavor.created_datetime_utc ?? 'unknown'}
+              stepCount={(stepsByFlavor.get(String(flavor.id)) ?? []).length}
+              isSelected={selectedFlavor === String(flavor.id)}
+              redirectTo={redirectTo}
+            />
           ))}
         </div>
       )}
@@ -779,9 +783,11 @@ export function StepsPanel({
 export function TestingPanel({
   flavors,
   selectedFlavor,
+  excludedFlavorCount = 0,
 }: {
   flavors: FlavorRow[]
   selectedFlavor: string
+  excludedFlavorCount?: number
 }) {
   return (
     <TestFlavorForm
@@ -790,6 +796,7 @@ export function TestingPanel({
         slug: flavor.slug ?? `Flavor ${flavor.id}`,
       }))}
       defaultFlavorId={selectedFlavor}
+      excludedFlavorCount={excludedFlavorCount}
     />
   )
 }
